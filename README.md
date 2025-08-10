@@ -150,6 +150,95 @@ flowchart TB
    ```
 
 ---
+在 Finance Aggregator 專案中，你可以透過 Scrapy 的設定與 Laravel 的 API 來靈活指定要爬哪些網站。以下是三種常見方式，並附上具體操作與代碼範例：
+
+---
+
+## 一、直接在 Scrapy Spider 中設定目標網站
+
+適合固定來源（如 Yahoo Finance、中央銀行、財經新聞網）：
+
+```python
+# scrapy_project/spiders/tw_stock_spider.py
+
+class TwStockSpider(scrapy.Spider):
+    name = 'tw_stock_spider'
+    allowed_domains = ['tw.stock.yahoo.com']
+    start_urls = [
+        'https://tw.stock.yahoo.com/quote/2330.TW',
+        'https://tw.stock.yahoo.com/quote/2412.TW',
+        'https://tw.stock.yahoo.com/quote/2303.TW',
+    ]
+
+    def parse(self, response):
+        # 解析邏輯
+        pass
+```
+
+你可以在 `start_urls` 中手動加入要爬的股票代碼頁面。
+
+---
+
+## 二、從 Laravel API 傳入動態參數
+
+適合需要手動指定或前端觸發的情境：
+
+```php
+// Laravel Controller
+public function triggerCrawl(Request $request)
+{
+    $symbol = $request->input('symbol'); // 例如 2330.TW
+    $url = env('SCRAPY_SCHEDULE_URL');
+
+    $response = Http::post($url, [
+        'project' => 'scrapy_project',
+        'spider' => 'tw_stock_spider',
+        'symbol' => $symbol,
+    ]);
+
+    return $response->json();
+}
+```
+
+Scrapy 接收 symbol 後，在 Spider 中使用：
+
+```python
+def start_requests(self):
+    symbol = self.symbol or '2330.TW'
+    url = f'https://tw.stock.yahoo.com/quote/{symbol}'
+    yield scrapy.Request(url, callback=self.parse)
+```
+
+你可以在 Scrapy 的 `from_crawler` 方法中讀取 `symbol` 參數，或透過 `CrawlerProcess` 傳入。
+
+---
+
+## 三、從資料庫或設定檔載入目標清單
+
+適合大量來源或定期更新的情境：
+
+```python
+def start_requests(self):
+    # 從本地 JSON 或資料庫載入
+    with open('target_symbols.json') as f:
+        symbols = json.load(f)
+
+    for symbol in symbols:
+        url = f'https://tw.stock.yahoo.com/quote/{symbol}'
+        yield scrapy.Request(url, callback=self.parse)
+```
+
+你可以建立一個 `targets/stocks.json`、`targets/news_sources.json` 等設定檔，集中管理所有目標。
+
+---
+
+## 延伸建議
+
+- 若來源網站需登入或驗證，可在 Scrapy 中設定 headers、cookies 或 middleware。  
+- 若來源網站有反爬機制，建議搭配代理池（如 Scrapy-Proxy-Pool）或使用 Selenium 模擬瀏覽器。  
+- 若來源為 API，可直接使用 Scrapy 的 `FormRequest` 或 `JsonRequest` 發送 POST/GET。
+
+---
 
 ## 關鍵代碼範例
 
