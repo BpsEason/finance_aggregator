@@ -1,0 +1,8 @@
+# Scrapy .gitignore
+.env
+__pycache__/
+*.pyc
+.scrapy/
+*.egg-info/
+build/
+dist/
