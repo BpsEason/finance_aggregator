@@ -1,0 +1,11 @@
+# Vue 前端 .gitignore
+/node_modules
+/dist
+/.env
+.env.*local
+/cypress/videos
+/cypress/screenshots
+npm-debug.log*
+yarn-debug.log*
+.idea
+.vscode
