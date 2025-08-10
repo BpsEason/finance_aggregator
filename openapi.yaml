@@ -1,0 +1,128 @@
+openapi: 3.0.3
+info:
+  title: Finance Aggregator API
+  version: 1.0.0
+paths:
+  /api/stocks:
+    get:
+      summary: 取得股票列表
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Stock'
+  /api/stocks/{symbol}:
+    get:
+      summary: 取得單一股票詳細
+      parameters:
+        - in: path
+          name: symbol
+          required: true
+          schema:
+            type: string
+          example: "2330.TW"
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockDetail'
+  /api/exchange-rates:
+    get:
+      summary: 取得所有匯率列表
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExchangeRate'
+  /api/financial-news:
+    get:
+      summary: 取得最新金融新聞列表
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FinancialNews'
+  /api/tests/trigger-crawl:
+    post:
+      summary: 手動觸發爬蟲執行
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: ["stocks", "exchange-rates", "news"]
+      responses:
+        '200':
+          description: 爬蟲已成功觸發
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: {type: string, example: "started"}
+                  job_id: {type: string, example: "some-unique-job-id"}
+
+components:
+  schemas:
+    Stock:
+      type: object
+      properties:
+        symbol: {type: string, example: "2330.TW"}
+        name: {type: string, example: "台積電"}
+        price: {type: number, format: float, example: 620.50}
+        change: {type: number, format: float, example: -3.00}
+        updated_at: {type: string, format: date-time, example: "2025-08-10T18:00:00Z"}
+    StockDetail:
+      allOf:
+        - $ref: '#/components/schemas/Stock'
+        - type: object
+          properties:
+            history:
+              type: array
+              items:
+                type: object
+                properties:
+                  date: {type: string, format: date, example: "2025-08-09"}
+                  price: {type: number, format: float, example: 623.50}
+    ExchangeRate:
+      type: object
+      properties:
+        currency: {type: string, example: "USD/TWD"}
+        rate: {type: number, format: float, example: 32.123}
+        updated_at: {type: string, format: date-time, example: "2025-08-10T18:00:00Z"}
+    FinancialNews:
+      type: object
+      properties:
+        title: {type: string, example: "台積電創新高，帶動科技股上漲"}
+        summary: {type: string, example: "今日台股開盤受惠於台積電股價表現強勁..."}
+        url: {type: string, format: url, example: "https://example.com/news/123"}
+        published_at: {type: string, format: date-time, example: "2025-08-10T17:30:00Z"}

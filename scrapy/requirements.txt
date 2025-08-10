@@ -1,0 +1,5 @@
+Scrapy==2.11.0
+scrapyweb==0.7.0
+PyMySQL==1.1.0 # 為了連接 MySQL，這裡使用 PyMySQL
+twisted[tls,http2]==22.10.0 # PyMySQL 的依賴，解決 adbapi 警告
+service_identity==21.1.0 # PyMySQL 的依賴

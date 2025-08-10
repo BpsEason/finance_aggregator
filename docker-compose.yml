@@ -1,0 +1,104 @@
+# docker-compose.yml
+
+version: '3.8'
+
+services:
+  # MySQL 資料庫服務
+  db:
+    image: mysql:8.0
+    container_name: laravel_db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-secret} # Root 使用者密碼，可透過 .env 設定
+      MYSQL_DATABASE: ${DB_DATABASE:-laravel_finance} # 資料庫名稱
+      MYSQL_USER: ${DB_USERNAME:-laravel} # 資料庫使用者
+      MYSQL_PASSWORD: ${DB_PASSWORD:-secret} # 資料庫密碼
+    ports:
+      - "3306:3306" # 將容器的 3306 埠映射到主機的 3306 埠
+    volumes:
+      - db_data:/var/lib/mysql # 將資料持久化到具名磁碟區
+    command: --default-authentication-plugin=mysql_native_password # 設定認證外掛程式
+    healthcheck: # 健康檢查，確保資料庫啟動完成
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+    networks:
+      - app_network # 連接到自定義網路
+
+  # Laravel 後端服務
+  app:
+    build:
+      context: ./laravel # Laravel 專案的目錄
+      dockerfile: Dockerfile # Laravel 的 Dockerfile
+    container_name: laravel_app
+    ports:
+      - "8000:8000" # 將容器的 8000 埠映射到主機的 8000 埠 (Laravel 開發伺服器)
+    volumes:
+      - ./laravel:/var/www/html # 將 Laravel 程式碼映射到容器內
+    depends_on:
+      db:
+        condition: service_healthy # 確保資料庫啟動且健康後才啟動 Laravel
+    environment:
+      # Laravel 資料庫連接設定
+      DB_CONNECTION: mysql
+      DB_HOST: db # 資料庫主機名稱 (與 db 服務名稱相同)
+      DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE:-laravel_finance}
+      DB_USERNAME: ${DB_USERNAME:-laravel}
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+      APP_DEBUG: ${APP_DEBUG:-true} # 應用程式除錯模式
+      APP_ENV: ${APP_ENV:-local} # 應用程式環境
+      APP_KEY: # 應用程式金鑰，啟動後需生成
+      # Scrapy 相關設定 (用於 Laravel 觸發爬蟲)
+      SCRAPY_HOST: scrapy # Scrapy 服務的主機名稱
+      SCRAPY_PORT: 6800 # Scrapyweb 預設埠口
+    networks:
+      - app_network # 連接到自定義網路
+
+  # Scrapy 爬蟲服務
+  scrapy:
+    build:
+      context: ./scrapy # Scrapy 專案的目錄
+      dockerfile: Dockerfile # Scrapy 的 Dockerfile
+    container_name: scrapy_crawler
+    ports:
+      - "6800:6800" # Scrapyweb 預設埠口，用於透過 HTTP 觸發爬蟲
+    volumes:
+      - ./scrapy:/app # 將 Scrapy 程式碼映射到容器內
+    depends_on:
+      db:
+        condition: service_healthy # 確保資料庫啟動且健康後才啟動 Scrapy
+    environment:
+      # Scrapy 連接資料庫的設定 (Scrapy Pipeline 會用到)
+      MYSQL_HOST: db
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${DB_DATABASE:-laravel_finance}
+      MYSQL_USER: ${DB_USERNAME:-laravel}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-secret}
+    networks:
+      - app_network # 連接到自定義網路
+
+  # Vue 3 前端服務
+  vue_frontend:
+    build:
+      context: ./vue-frontend # Vue 專案的目錄
+      dockerfile: Dockerfile # Vue 的 Dockerfile
+    container_name: vue_frontend_app
+    ports:
+      - "5173:5173" # Vite 開發伺服器預設埠口
+    volumes:
+      - ./vue-frontend:/app # 將 Vue 程式碼映射到容器內
+    depends_on:
+      app:
+        condition: service_started # 確保 Laravel 後端啟動後才啟動前端
+    networks:
+      - app_network # 連接到自定義網路
+    command: npm run dev -- --host 0.0.0.0 # 確保 Vite 在容器內可以從外部訪問
+
+# 具名磁碟區，用於持久化 MySQL 資料
+volumes:
+  db_data:
+
+# 自定義網路，讓所有服務可以相互通訊
+networks:
+  app_network:
+    driver: bridge
