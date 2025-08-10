@@ -31,9 +31,64 @@
 ## 系統架構
 
 ```
-   Scrapy (Python) ──▶ MySQL ──▶ Laravel API ──▶ Vue 3 SPA
-             ▲                              │
-             └──── Cron / Scheduler ────────┘
+   flowchart TB
+
+  subgraph 排程觸發
+    Cron["Cron 及 Laravel 排程器"]
+  end
+
+  subgraph 爬蟲層
+    WebAPI["Scrapy 網路 API"]
+    Crawler["Scrapy 爬蟲 多容器並行"]
+    WebAPI -->|"POST /schedule.json"| Crawler
+  end
+
+  Cron --> WebAPI
+
+  subgraph 資料庫層
+    DBMaster["MySQL 主庫 UPSERT 寫入"]
+    DBReplica["MySQL 從庫 只讀"]
+  end
+
+  Crawler -->|"非同步 Pipeline"| DBMaster
+  DBMaster -->|"複製"| DBReplica
+
+  subgraph 快取與佇列
+    Redis["Redis Session Cache Queue"]
+  end
+
+  Crawler --> Redis
+  DBMaster --> Redis
+  DBReplica --> Redis
+
+  subgraph 後端 API
+    Proxy["Nginx Load Balancer"]
+    PHP["PHP-FPM"]
+    Worker["Queue 工作者"]
+  end
+
+  Proxy --> PHP
+  PHP -->|"讀取"| DBReplica
+  PHP -->|"讀寫"| DBMaster
+  PHP --> Redis
+  PHP --> Worker
+
+  subgraph 前端 SPA
+    SPA["Vue 3 SPA Vite Pinia"]
+  end
+
+  SPA --> Proxy
+
+  subgraph 監控與日誌
+    ELK["ELK 堆疊 Logstash Elasticsearch Kibana"]
+    Prom["Prometheus Grafana"]
+  end
+
+  PHP -->|"日誌"| ELK
+  Crawler -->|"日誌"| ELK
+  PHP -->|"Metrics"| Prom
+  Crawler -->|"Metrics"| Prom
+
 ```
 
 ---
