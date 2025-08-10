@@ -1,0 +1,6 @@
+* text=auto
+
+/.github/** linguist-language=yaml
+/vendor/** export-ignore
+/node_modules/** export-ignore
+/.docker/** export-ignore
