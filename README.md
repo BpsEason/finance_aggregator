@@ -62,7 +62,6 @@
 ```mermaid
 flowchart TB
 
-  %% 原本關鍵組件
   subgraph 排程觸發
     Cron["Cron 及 Laravel 排程器"]
   end
@@ -76,32 +75,31 @@ flowchart TB
   Cron --> WebAPI
 
   subgraph 資料庫層
-    RDProxy["MySQL Proxy 負載均衡"]
     DBMaster["MySQL 主庫 UPSERT 寫入"]
     DBReplica["MySQL 從庫 只讀"]
-    RDProxy --> DBMaster
-    RDProxy --> DBReplica
   end
 
   Crawler -->|"非同步 Pipeline"| DBMaster
   DBMaster -->|"複製"| DBReplica
 
   subgraph 快取與佇列
-    RCluster["Redis Cluster 分片"]
+    Redis["Redis Session Cache Queue"]
   end
 
-  Crawler --> RCluster
-  PHP    --> RCluster
+  Crawler --> Redis
+  DBMaster --> Redis
+  DBReplica --> Redis
 
   subgraph 後端 API
     Proxy["Nginx Load Balancer"]
-    PHP  ["PHP FPM"]
+    PHP["PHP-FPM"]
     Worker["Queue 工作者"]
   end
 
   Proxy --> PHP
   PHP -->|"讀取"| DBReplica
   PHP -->|"讀寫"| DBMaster
+  PHP --> Redis
   PHP --> Worker
 
   subgraph 前端 SPA
@@ -110,29 +108,15 @@ flowchart TB
 
   SPA --> Proxy
 
-  subgraph 監控與回溯
-    ELK ["ELK 堆疊 Logstash Elasticsearch Kibana"]
+  subgraph 監控與日誌
+    ELK["ELK 堆疊 Logstash Elasticsearch Kibana"]
     Prom["Prometheus Grafana"]
-    APM ["APM 應用效能監控"]
   end
 
-  PHP     -->|"日誌"| ELK
+  PHP -->|"日誌"| ELK
   Crawler -->|"日誌"| ELK
-  PHP     -->|"Metrics"| Prom
+  PHP -->|"Metrics"| Prom
   Crawler -->|"Metrics"| Prom
-  ELK     --> APM
-  Prom    --> APM
-
-  subgraph 效能優化
-    HPA ["K8S 水平自動擴展"]
-    CDN ["CDN 邊緣快取加速"]
-  end
-
-  HPA --> Cron
-  HPA --> Crawler
-  HPA --> PHP
-  HPA --> Worker
-  CDN --> SPA
 ```
 
 ---
