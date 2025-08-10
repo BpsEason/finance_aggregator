@@ -1,159 +1,218 @@
 # Finance Aggregator 金融資訊聚合平台
 
-Finance Aggregator 是一套端到端的金融數據聚合解決方案，涵蓋自動爬取、集中存儲、API 服務與互動式前端展示。只需 Docker Compose 一鍵部署，即可獲取並可視化台股、國際股價、匯率與新聞數據。
+**Finance Aggregator** 是一套端到端的金融數據聚合解決方案，結合 Scrapy 爬蟲、自動 UPSERT 機制、Laravel RESTful API 與 Vue 3 互動式前端，一鍵部署即可取得台股、匯率與新聞等多源金融資訊。
 
 ---
 
 ## 亮點
 
-- 完整容器化部署：MySQL、Laravel API、Scrapy 爬蟲、Vue 3 前端全由 Docker Compose 管理。  
-- 多源資料聚合：定時抓取台股、全球匯率與金融新聞，採用 UPSERT 機制避免重複。  
-- 高效 RESTful API：Laravel 10 + PHP 8.2 提供 Stocks、ExchangeRates、News 三大端點。  
-- 互動式儀表板：Vue 3 + Vite + Pinia 單頁應用，支援列表、詳情與分頁導航。  
-- 全面測試覆蓋：PHPUnit、PyTest、Vitest 與 Cypress，保證後端、爬蟲與前端品質。  
-- 自動化 CI/CD：GitHub Actions 執行測試、Lint、映像建置，並可根據分支自動部署。
+- **一鍵容器化部署**：Docker Compose 管理 MySQL、Laravel、Scrapy 爬蟲與 Vue 3 前端  
+- **高效 UPSERT 機制**：Scrapy Pipeline 使用非同步連線池，避免重複寫入  
+- **完整 RESTful API**：Laravel 10 + PHP 8.2 提供 Stocks、ExchangeRates、News 等端點  
+- **互動式前端**：Vue 3 + Vite + Pinia 建置 SPA，支援分頁、列表與詳情視圖  
+- **全面測試保障**：PHPUnit、PyTest、Vitest 與 Cypress 四大框架  
+- **自動化 CI/CD**：GitHub Actions 驗證測試、Lint、映像建置，並可根據分支自動部署  
 
 ---
 
-## 關鍵技術
+## 關鍵技術棧
 
-| 服務／模組         | 技術棧                         | 角色說明                                    |
-|--------------------|------------------------------|---------------------------------------------|
-| crawler            | Python 3.11 + Scrapy         | 分散式爬蟲：股票、匯率、新聞資料抓取並 UPSERT      |
-| db                 | MySQL 8                      | 關聯式存儲：支援歷史資料、索引優化               |
-| backend (API)      | Laravel 10 + PHP 8.2         | RESTful API、後台 Dashboard                   |
-| frontend (SPA)     | Vue 3 + Vite + Pinia         | 單頁應用：互動式列表、詳細頁與分頁               |
-| orchestrator       | Docker + Docker Compose      | 容器化啟動與網路管理                         |
-| ci/cd              | GitHub Actions               | 自動化測試、掃描、映像建置與可選部署             |
+| 模組              | 技術                  | 說明                                |
+|-------------------|-----------------------|-------------------------------------|
+| 爬蟲（crawler）   | Python 3.11 + Scrapy  | 非同步抓取台股、匯率、新聞並 UPSERT  |
+| 資料庫（db）      | MySQL 8               | 支援 UPSERT、歷史資料、索引優化      |
+| 後端（API）       | Laravel 10 + PHP 8.2  | RESTful API + Blade 儀表板           |
+| 前端（SPA）       | Vue 3 + Vite + Pinia  | 單頁應用：列表、分頁、詳情           |
+| 容器化（orchestrator） | Docker Compose   | 服務啟動、網絡管理                   |
+| CI/CD             | GitHub Actions        | 自動跑測試、建置 Docker 映像         |
 
 ---
 
 ## 系統架構
 
-       ┌────────────┐      ┌───────────────┐      ┌────────────┐      ┌──────────────┐  
-       │   Scrapy   │ ───▶ │    MySQL      │ ◀─── │  Laravel   │ ───▶ │   Vue 3      │  
-       │ (Crawler)  │      │ (finance_db)  │      │ (API +     │      │ (Vite SPA)   │  
-       │ Python 3.11│      │               │      │ Dashboard) │      │              │  
-       └────────────┘      └───────────────┘      └────────────┘      └──────────────┘  
-             ▲                                                               │  
-             │                                                               │  
-             └────────Cron / Laravel Scheduler───────────┘  
-
----
-
-## 功能一覽
-
-1. 自動爬取  
-   - 台股（tw_stock_spider）  
-   - 匯率（exchange_rate_spider）  
-   - 新聞（financial_news_spider）  
-2. UPSERT 機制  
-   - 避免重複插入  
-   - 非同步連線池高效寫入  
-3. RESTful API  
-   - `GET  /api/stocks`  
-   - `GET  /api/stocks/{symbol}`  
-   - `GET  /api/exchange-rates`  
-   - `GET  /api/financial-news?page=&limit=`  
-   - `POST /api/tests/trigger-crawl`（手動觸發爬蟲）  
-4. 前端互動  
-   - 股票列表與詳細  
-   - 匯率一覽  
-   - 分頁新聞與來源連結  
-5. 後台儀表板  
-   - Blade 模板快速自訂  
-   - Laravel Scheduler 排程管理  
+```
+   Scrapy (Python) ──▶ MySQL ──▶ Laravel API ──▶ Vue 3 SPA
+             ▲                              │
+             └──── Cron / Scheduler ────────┘
+```
 
 ---
 
 ## 快速上手
 
-### 先決條件
+1. 複製環境變數  
+   ```bash
+   cp .env.example .env
+   cp scrapy/.env.example scrapy/.env
+   cp vue-frontend/.env.example vue-frontend/.env
+   ```
 
-- Docker & Docker Compose ≥ 1.29  
-- （開發選項）Node.js ≥ 18、npm 或 yarn  
+2. 一鍵啟動  
+   ```bash
+   docker compose up -d --build
+   ```
 
-### 環境變數
+3. 安裝依賴與遷移資料庫  
+   ```bash
+   docker compose exec app composer install
+   docker compose exec app php artisan key:generate
+   docker compose exec app php artisan migrate
 
-根目錄含 `.env.example`、`scrapy/.env.example`、`vue-frontend/.env.example`。複製並依需求修改：
+   docker compose exec vue_frontend npm install
+   ```
 
-    cp .env.example .env
-    cp scrapy/.env.example scrapy/.env
-    cp vue-frontend/.env.example vue-frontend/.env
-
-### 一鍵部署
-
-    docker compose up -d --build
-
-容器健康後，執行依賴安裝與資料庫遷移：
-
-    # Laravel
-    docker compose exec app composer install
-    docker compose exec app php artisan key:generate
-    docker compose exec app php artisan migrate
-
-    # Vue 前端
-    docker compose exec vue_frontend npm install
-
-（可選）手動觸發爬蟲：
-
-    docker compose exec scrapy scrapy crawl tw_stock_spider
+4. (可選) 手動觸發爬蟲  
+   ```bash
+   docker compose exec scrapy scrapy crawl tw_stock_spider
+   ```
 
 ---
 
-## 使用方式
+## 關鍵代碼範例
 
-- Vue SPA： http://localhost:5173  
-- Laravel API： http://localhost:8000/api  
-- Scrapyweb UI： http://localhost:6800  
+### 1. Scrapy Pipeline：DatabasePipeline（`scrapy_project/pipelines.py`）
+
+```python
+class DatabasePipeline:
+    def __init__(self, db_settings):
+        self.db_settings = db_settings
+        # adbapi.ConnectionPool 建立非同步連線池
+        self.dbpool = None
+
+    def open_spider(self, spider):
+        # Spider 啟動時開池
+        self.dbpool = adbapi.ConnectionPool('pymysql', **self.db_settings)
+
+    def process_item(self, item, spider):
+        # 根據 item 類型分派異步寫入
+        if isinstance(item, StockItem):
+            self.dbpool.runInteraction(self._upsert_stock, item)
+        elif isinstance(item, ExchangeRateItem):
+            self.dbpool.runInteraction(self._upsert_exchange_rate, item)
+        elif isinstance(item, FinancialNewsItem):
+            self.dbpool.runInteraction(self._upsert_financial_news, item)
+        return item
+
+    def _upsert_stock(self, cursor, item):
+        # UPSERT 股票主檔
+        cursor.execute("""
+            INSERT INTO stocks(symbol, name, price, `change`, updated_at)
+            VALUES (%s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+              price = VALUES(price),
+              `change` = VALUES(`change`),
+              updated_at = VALUES(updated_at)
+        """, (item['symbol'], item['name'], item['price'], item['change'], item['updated_at']))
+```
+
+### 2. Laravel 控制器：TriggerCrawl（`app/Http/Controllers/Api/TestController.php`）
+
+```php
+public function triggerCrawl(Request $request)
+{
+    $type = $request->input('type');  // stocks | exchange-rates | news
+
+    // 驗證類型
+    if (!in_array($type, ['stocks','exchange-rates','news'])) {
+        return response()->json(['error'=>'Invalid crawl type.'], 400);
+    }
+
+    $spider = match($type) {
+      'stocks' => 'tw_stock_spider',
+      'exchange-rates' => 'exchange_rate_spider',
+      'news' => 'financial_news_spider',
+    };
+
+    $url = sprintf('http://%s:%s/schedule.json',
+      env('SCRAPY_HOST','scrapy'), env('SCRAPY_PORT',6800));
+
+    $resp = Http::post($url, ['project'=>'scrapy_project','spider'=>$spider]);
+    if ($resp->successful()) {
+        return ['status'=>'started','job_id'=> $resp->json('jobid')];
+    }
+    return response()->json(['status'=>'failed'], $resp->status());
+}
+```
+
+### 3. Laravel REST API：StockController（`app/Http/Controllers/Api/StockController.php`）
+
+```php
+public function index()
+{
+    // 回傳所有股票
+    return response()->json(Stock::all());
+}
+
+public function show(string $symbol)
+{
+    // 含歷史價格關聯
+    $stock = Stock::where('symbol',$symbol)
+                  ->with('history')
+                  ->firstOrFail();
+    return response()->json($stock);
+}
+```
+
+### 4. Docker Compose 核心片段（`docker-compose.yml`）
+
+```yaml
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: laravel_finance
+      MYSQL_USER: laravel
+      MYSQL_PASSWORD: secret
+    healthcheck: 
+      test: ["CMD", "mysqladmin","ping","-h","localhost"]
+      retries: 10
+
+  app:
+    build: ./laravel
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      APP_KEY: ''
+
+  scrapy:
+    build: ./scrapy
+    depends_on:
+      db:
+        condition: service_healthy
+
+  vue_frontend:
+    build: ./vue-frontend
+    ports: ["5173:5173"]
+    depends_on:
+      app:
+        condition: service_started
+```
 
 ---
 
-## 測試
+## 測試指令
 
-### Laravel（PHPUnit）
-
-    docker compose exec app php artisan test
-
-### Scrapy（PyTest）
-
-    docker compose exec scrapy pytest
-
-### Vue 前端
-
-- 單元測試（Vitest）：
-
-      docker compose exec vue_frontend npm run test:unit
-
-- E2E 測試（Cypress）：
-
-      docker compose exec vue_frontend npm run test:e2e:dev
+- **Laravel** (PHPUnit)  
+  ```bash
+  docker compose exec app php artisan test
+  ```
+- **Scrapy** (PyTest)  
+  ```bash
+  docker compose exec scrapy pytest
+  ```
+- **Vue**  
+  - 單元 (Vitest): `docker compose exec vue_frontend npm run test:unit`  
+  - E2E (Cypress): `docker compose exec vue_frontend npm run test:e2e:dev`  
 
 ---
 
-## CI/CD
+## 授權與貢獻
 
-GitHub Actions 工作流程自動完成：  
-1. 安裝 PHP、Python、Node.js 環境  
-2. 啟動 MySQL 容器  
-3. Laravel 測試與遷移  
-4. Scrapy 測試  
-5. Vue 單元與 E2E 測試  
-6. Docker 映像建置與標記  
-7. （可選）依分支部署至 Staging/Production  
+- 授權：MIT License  
+- 歡迎提交 Issue 與 PR，詳見 [CONTRIBUTING.md](./CONTRIBUTING.md)  
 
 ---
 
-## 貢獻
-
-歡迎開 issue 或 PR，請依下列步驟：  
-1. Fork 本 Repo  
-2. 建立 feature 分支  
-3. 完成後提交 PR  
-4. CI 通過後合併  
-
----
-
-## 授權
-
-本專案採用 MIT License，詳見 LICENSE。
+> 如需更完整的範例或新增模組，請參考各目錄底下完整檔案與註解。
