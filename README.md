@@ -30,8 +30,8 @@
 
 ## 系統架構
 
-```
-   flowchart TB
+```mermaid
+flowchart TB
 
   subgraph 排程觸發
     Cron["Cron 及 Laravel 排程器"]
@@ -88,7 +88,6 @@
   Crawler -->|"日誌"| ELK
   PHP -->|"Metrics"| Prom
   Crawler -->|"Metrics"| Prom
-
 ```
 
 ---
