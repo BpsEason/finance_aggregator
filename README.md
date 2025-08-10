@@ -28,11 +28,41 @@
 
 ---
 
+## 效能優化策略
+
+- 架構層面  
+  - 採用 Kubernetes 水平自動擴展（HPA）動態增減爬蟲容器、API 服務或工作者節點。  
+  - 在資料庫前面部署 MySQL Proxy 進行負載均衡與連線池管理。
+
+- 資料庫層面  
+  - 建立必要索引並定期重建以加快查詢速度。  
+  - 採用分庫分表或 Sharding 來分散寫入壓力。  
+  - 只對熱點資料使用專門快取，再利用 Redis Cluster 實現分片與高可用。
+
+- 快取與佇列  
+  - Redis 採用 Cluster 模式，將熱門 Key 分散到多個節點。  
+  - 使用管線（pipeline）批次執行命令以降低網路往返成本。
+
+- 後端 API  
+  - 在 Nginx 層開啟 gzip 壓縮和 HTTP2 加速，搭配限流和熔斷策略。  
+  - PHP 或 Worker 採用連線池管理，減少頻繁開關 DB 連線的成本。
+
+- 前端 SPA  
+  - 靜態資源上傳至 CDN 邊緣節點，並設定合理的快取失效。  
+  - 採用資源壓縮、Tree-shaking、Lazy load 減少初次載入時間。
+
+- 監控與回溯  
+  - 導入 APM （應用效能監控）工具做分散式追蹤，快速定位瓶頸。  
+  - 持續收集 Metrics，設定告警，並以 Grafana 視覺化趨勢。
+
+---
+
 ## 系統架構
 
 ```mermaid
 flowchart TB
 
+  %% 原本關鍵組件
   subgraph 排程觸發
     Cron["Cron 及 Laravel 排程器"]
   end
@@ -46,31 +76,32 @@ flowchart TB
   Cron --> WebAPI
 
   subgraph 資料庫層
+    RDProxy["MySQL Proxy 負載均衡"]
     DBMaster["MySQL 主庫 UPSERT 寫入"]
     DBReplica["MySQL 從庫 只讀"]
+    RDProxy --> DBMaster
+    RDProxy --> DBReplica
   end
 
   Crawler -->|"非同步 Pipeline"| DBMaster
   DBMaster -->|"複製"| DBReplica
 
   subgraph 快取與佇列
-    Redis["Redis Session Cache Queue"]
+    RCluster["Redis Cluster 分片"]
   end
 
-  Crawler --> Redis
-  DBMaster --> Redis
-  DBReplica --> Redis
+  Crawler --> RCluster
+  PHP    --> RCluster
 
   subgraph 後端 API
     Proxy["Nginx Load Balancer"]
-    PHP["PHP-FPM"]
+    PHP  ["PHP FPM"]
     Worker["Queue 工作者"]
   end
 
   Proxy --> PHP
   PHP -->|"讀取"| DBReplica
   PHP -->|"讀寫"| DBMaster
-  PHP --> Redis
   PHP --> Worker
 
   subgraph 前端 SPA
@@ -79,15 +110,29 @@ flowchart TB
 
   SPA --> Proxy
 
-  subgraph 監控與日誌
-    ELK["ELK 堆疊 Logstash Elasticsearch Kibana"]
+  subgraph 監控與回溯
+    ELK ["ELK 堆疊 Logstash Elasticsearch Kibana"]
     Prom["Prometheus Grafana"]
+    APM ["APM 應用效能監控"]
   end
 
-  PHP -->|"日誌"| ELK
+  PHP     -->|"日誌"| ELK
   Crawler -->|"日誌"| ELK
-  PHP -->|"Metrics"| Prom
+  PHP     -->|"Metrics"| Prom
   Crawler -->|"Metrics"| Prom
+  ELK     --> APM
+  Prom    --> APM
+
+  subgraph 效能優化
+    HPA ["K8S 水平自動擴展"]
+    CDN ["CDN 邊緣快取加速"]
+  end
+
+  HPA --> Cron
+  HPA --> Crawler
+  HPA --> PHP
+  HPA --> Worker
+  CDN --> SPA
 ```
 
 ---
